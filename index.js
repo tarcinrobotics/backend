@@ -1,38 +1,57 @@
-const express = require("express")
-const mongoose = require('mongoose')
-const cors = require("cors")
-const UserModel = require('./models/User')
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const authRoutes = require('./routes/auth');
+const User = require('./models/user');
+const bcrypt = require('bcryptjs'); // Add this line
+require('dotenv').config();
 
+const app = express();
+const PORT = 5000;
 
-const app = express()
-app.use(express.json())
-app.use(cors())
+// Middleware
+app.use(cors({
+    origin:"code.tarcinrobotic.in",
+    credentials: true
+}));
+app.use(express.json());
 
-mongoose.connect("mongodb+srv://tarcinrobotics301:tarcinrobotics301@cluster0.kpaipm9.mongodb.net/?retryWrites=true&w=majority")
+// Routes
+app.use('/api/auth', authRoutes);
 
-app.post("/login",(req,res)=> {
-    const {email, password} = req.body
-    UserModel.findOne({email: email})
-    .then(user => {
-        if(user){
-            if(user.password === password){
-                res.json("Success")
-            }else{
-                res.json("Password is incorrect")
-            }
-        } else{
-            res.json("No records found")
+// Connect to MongoDB
+const connectDB = async () => {
+    try {
+        await mongoose.connect(process.env.MONGO_URI);
+        console.log('MongoDB connected');
+
+        // Create a default user if not exists
+        const defaultUserEmail = 'tarcinadmin';
+        const defaultUserPassword = 'tarcinadmin';
+
+        let user = await User.findOne({ email: defaultUserEmail });
+        if (!user) {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(defaultUserPassword, salt);
+
+            user = new User({
+                email: defaultUserEmail,
+                password: hashedPassword, // Store as hashed
+            });
+            await user.save();
+            console.log('Default user created:', defaultUserEmail);
+        } else {
+            console.log('Default user already exists:', defaultUserEmail);
         }
-    })
-})
+    } catch (err) {
+        console.error(err.message);
+        process.exit(1);
+    }
+};
 
-app.post('/register',(req,res)=> {
-    UserModel.create(req.body)
-    .then(coders => res.json(coders))
-    .catch(err => res.json(err))
-})
+connectDB();
 
-
-app.listen(3001, () => {
-    console.log("Server is running")
-})
+// Start the server
+app.listen(PORT, () => {
+    console.log(`Backend running on http://localhost:${PORT}`);
+});
